@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, FlatList, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as tf from "@tensorflow/tfjs";
-import * as np from "numjs";
+import { BarChart, LineChart } from "react-native-chart-kit";
+import { Dimensions } from "react-native";
 import { Client, Databases } from "appwrite"; // Import Appwrite client and databases
+
+// Mock implementation of calculateSafetyScore function
+const calculateSafetyScore = (accel_x: number, accel_y: number, accel_z: number, param1: any, param2: any) => {
+  // Replace this with the actual logic to calculate the safety score
+  const score = 100 - (Math.abs(accel_x) + Math.abs(accel_y) + Math.abs(accel_z));
+  return { score: Math.max(0, score) };
+};
 
 // Initialize Appwrite client
 const client = new Client();
@@ -56,41 +63,10 @@ const safetyScores = [
   },
 ];
 
-export const calculateSafetyScore = (
-  accel_x: number,
-  accel_y: number,
-  accel_z: number,
-  prev_accel_magnitude: number | null,
-  prev_time: number | null
-) => {
-  const current_time = Date.now() / 1000;
-  const time_diff = prev_time ? current_time - prev_time : 1;
+const screenWidth = Dimensions.get("window").width;
 
-  const accel_magnitude = Math.sqrt(accel_x ** 2 + accel_y ** 2 + accel_z ** 2);
-  const jerk = prev_accel_magnitude
-    ? (accel_magnitude - prev_accel_magnitude) / time_diff
-    : 0;
-  const braking_force = -accel_z;
-  let score = 100;
-
-  if (accel_magnitude > 3) {
-    score -= 10;
-  }
-  if (braking_force > 2) {
-    score -= 10;
-  }
-  if (Math.abs(jerk) > 2) {
-    score -= 15;
-  }
-
-  score = Math.max(0, score);
-  return { score, accel_magnitude, current_time };
-};
-
-export const useSafetyScore = () => {
-  const [safetyScore, setSafetyScore] = useState<number>(100);
-  const [prevAccelMagnitude, setPrevAccelMagnitude] = useState<number | null>(null);
-  const [prevTime, setPrevTime] = useState<number | null>(null);
+const History = () => {
+  const [realTimeSafetyScore, setRealTimeSafetyScore] = useState<number>(100);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -98,23 +74,19 @@ export const useSafetyScore = () => {
         const response = await databases.listDocuments('67b57da3000fd43c619a', '67b5a262002bc11c0b92');
         const data = response.documents[0]; // Assuming you want the first document
 
-        const accel_x = data.accel_x;
-        const accel_y = data.accel_y;
-        const accel_z = data.accel_z;
+        const accel_x = parseFloat(data.accel_x) || 0;
+        const accel_y = parseFloat(data.accel_y) || 0;
+        const accel_z = parseFloat(data.accel_z) || 0;
 
-        const { score, accel_magnitude, current_time } = calculateSafetyScore(
+        const { score } = calculateSafetyScore(
           accel_x,
           accel_y,
           accel_z,
-          prevAccelMagnitude,
-          prevTime
+          null,
+          null
         );
 
-        setSafetyScore(score);
-        setPrevAccelMagnitude(accel_magnitude);
-        setPrevTime(current_time);
-
-        console.log(`Real-time Safety Score: ${score}`);
+        setRealTimeSafetyScore(score);
       } catch (error) {
         console.error('Error fetching data:', error);
       }
@@ -123,13 +95,7 @@ export const useSafetyScore = () => {
     const interval = setInterval(fetchData, 1000);
 
     return () => clearInterval(interval);
-  }, [prevAccelMagnitude, prevTime]);
-
-  return safetyScore;
-};
-
-const History = () => {
-  // const safetyScore = useSafetyScore();
+  }, []);
 
   const renderRideItem = ({ item }: { item: { id: string; name: string; date: string; image: string; mileage: string } }) => (
     <View className="flex flex-row items-center justify-between p-4 border-b border-gray-200">
@@ -183,20 +149,65 @@ const History = () => {
               />
             </View>
 
+            <View className="px-5 py-4">
+              <Text className="text-2xl font-bold text-black-300">Safety Scores</Text>
+              <FlatList
+                data={safetyScores}
+                renderItem={renderScoreItem}
+                keyExtractor={(item) => item.id}
+                contentContainerClassName="pb-4"
+                showsVerticalScrollIndicator={false}
+              />
+            </View>
+
+            <View className="px-5 py-4">
+              <Text className="text-2xl font-bold text-black-300">Real-time Safety Score</Text>
+              <LineChart
+                data={{
+                  labels: ["0s", "1s", "2s", "3s", "4s", "5s"],
+                  datasets: [
+                    {
+                      data: [
+                        realTimeSafetyScore || 0,
+                        realTimeSafetyScore - 5 || 0,
+                        realTimeSafetyScore - 10 || 0,
+                        realTimeSafetyScore - 15 || 0,
+                        realTimeSafetyScore - 20 || 0,
+                        realTimeSafetyScore - 25 || 0,
+                      ],
+                    },
+                  ],
+                }}
+                width={screenWidth - 40}
+                height={220}
+                chartConfig={{
+                  backgroundColor: "#e26a00",
+                  backgroundGradientFrom: "#fb8c00",
+                  backgroundGradientTo: "#ffa726",
+                  decimalPlaces: 2,
+                  color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                  style: {
+                    borderRadius: 16,
+                  },
+                  propsForDots: {
+                    r: "6",
+                    strokeWidth: "2",
+                    stroke: "#ffa726",
+                  },
+                }}
+                bezier
+                style={{
+                  marginVertical: 8,
+                  borderRadius: 16,
+                }}
+              />
+            </View>
           </>
         }
         data={[]}
         renderItem={null}
-        // ListFooterComponent={
-        //   <View className="px-5 py-4">
-        //     <Text className="text-2xl font-bold text-black-300">
-        //       Real-time Safety Score
-        //     </Text>
-        //     <Text className="text-lg font-bold text-primary-300 justify-center align-middle">
-        //       {safetyScore.toFixed(2)}
-        //     </Text>
-        //   </View>
-        // }
+        contentContainerStyle={{ paddingBottom: 100 }} // Allow more scrolling
       />
     </SafeAreaView>
   );

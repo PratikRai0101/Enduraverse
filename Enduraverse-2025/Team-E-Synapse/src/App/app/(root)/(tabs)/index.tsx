@@ -58,6 +58,8 @@ const Home = () => {
   const [distance, setDistance] = useState(0);
   const [mileage, setMileage] = useState(0);
   const [alerts, setAlerts] = useState<string[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [rideHistory, setRideHistory] = useState<any[]>([]);
 
   let prevSpeed = 0;
   let totalDistance = 0;
@@ -148,6 +150,23 @@ const Home = () => {
     if (hour < 12 && hour > 5) return "Good Morning";
     if (hour < 18 && hour >= 12) return "Good Afternoon";
     return "Good Evening";
+  };
+
+  const handleStartRecording = () => {
+    setIsRecording(true);
+    setRideHistory([]);
+  };
+
+  const handleStopRecording = () => {
+    setIsRecording(false);
+    const newRide = {
+      id: (rideHistory.length + 1).toString(),
+      name: `Ride on ${new Date().toLocaleDateString()}`,
+      date: new Date().toLocaleString(),
+      image: "https://via.placeholder.com/150",
+      mileage: `${mileage.toFixed(2)} km/l`,
+    };
+    setRideHistory((prevHistory) => [...prevHistory, newRide]);
   };
 
   return (
@@ -248,6 +267,22 @@ const Home = () => {
                     No alerts
                   </Text>
                 )}
+              </View>
+              <View className="flex flex-row mt-5">
+                <TouchableOpacity
+                  onPress={handleStartRecording}
+                  className="bg-green-500 px-4 py-2 rounded-full mr-2"
+                  disabled={isRecording}
+                >
+                  <Text className="text-white font-rubik-bold">Start</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleStopRecording}
+                  className="bg-red-500 px-4 py-2 rounded-full"
+                  disabled={!isRecording}
+                >
+                  <Text className="text-white font-rubik-bold">Stop</Text>
+                </TouchableOpacity>
               </View>
             </View>
             <View className="mt-5">
