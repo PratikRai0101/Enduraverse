@@ -3,6 +3,15 @@ import { View, Text, FlatList, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as tf from "@tensorflow/tfjs";
 import * as np from "numjs";
+import { Client, Databases } from "appwrite"; // Import Appwrite client and databases
+
+// Initialize Appwrite client
+const client = new Client();
+client
+  .setEndpoint('https://cloud.appwrite.io/v1') // Your Appwrite endpoint
+  .setProject('67b57be1003052aa6282'); // Your project ID
+
+const databases = new Databases(client);
 
 const pastRides = [
   {
@@ -47,7 +56,7 @@ const safetyScores = [
   },
 ];
 
-const calculateSafetyScore = (
+export const calculateSafetyScore = (
   accel_x: number,
   accel_y: number,
   accel_z: number,
@@ -78,34 +87,49 @@ const calculateSafetyScore = (
   return { score, accel_magnitude, current_time };
 };
 
-const History = () => {
+export const useSafetyScore = () => {
   const [safetyScore, setSafetyScore] = useState<number>(100);
   const [prevAccelMagnitude, setPrevAccelMagnitude] = useState<number | null>(null);
   const [prevTime, setPrevTime] = useState<number | null>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const accel_x = Math.random() * 10 - 5;
-      const accel_y = Math.random() * 10 - 5;
-      const accel_z = Math.random() * 10 - 5;
+    const fetchData = async () => {
+      try {
+        const response = await databases.listDocuments('67b57da3000fd43c619a', '67b5a262002bc11c0b92');
+        const data = response.documents[0]; // Assuming you want the first document
 
-      const { score, accel_magnitude, current_time } = calculateSafetyScore(
-        accel_x,
-        accel_y,
-        accel_z,
-        prevAccelMagnitude,
-        prevTime
-      );
+        const accel_x = data.accel_x;
+        const accel_y = data.accel_y;
+        const accel_z = data.accel_z;
 
-      setSafetyScore(score);
-      setPrevAccelMagnitude(accel_magnitude);
-      setPrevTime(current_time);
+        const { score, accel_magnitude, current_time } = calculateSafetyScore(
+          accel_x,
+          accel_y,
+          accel_z,
+          prevAccelMagnitude,
+          prevTime
+        );
 
-      console.log(`Real-time Safety Score: ${score}`);
-    }, 1000);
+        setSafetyScore(score);
+        setPrevAccelMagnitude(accel_magnitude);
+        setPrevTime(current_time);
+
+        console.log(`Real-time Safety Score: ${score}`);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    const interval = setInterval(fetchData, 1000);
 
     return () => clearInterval(interval);
   }, [prevAccelMagnitude, prevTime]);
+
+  return safetyScore;
+};
+
+const History = () => {
+  // const safetyScore = useSafetyScore();
 
   const renderRideItem = ({ item }: { item: { id: string; name: string; date: string; image: string; mileage: string } }) => (
     <View className="flex flex-row items-center justify-between p-4 border-b border-gray-200">
@@ -163,16 +187,16 @@ const History = () => {
         }
         data={[]}
         renderItem={null}
-        ListFooterComponent={
-          <View className="px-5 py-4">
-            <Text className="text-2xl font-bold text-black-300">
-              Real-time Safety Score
-            </Text>
-            <Text className="text-lg font-bold text-primary-300 justify-center align-middle">
-              {safetyScore.toFixed(2)}
-            </Text>
-          </View>
-        }
+        // ListFooterComponent={
+        //   <View className="px-5 py-4">
+        //     <Text className="text-2xl font-bold text-black-300">
+        //       Real-time Safety Score
+        //     </Text>
+        //     <Text className="text-lg font-bold text-primary-300 justify-center align-middle">
+        //       {safetyScore.toFixed(2)}
+        //     </Text>
+        //   </View>
+        // }
       />
     </SafeAreaView>
   );

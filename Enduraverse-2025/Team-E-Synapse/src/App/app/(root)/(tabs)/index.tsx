@@ -9,24 +9,36 @@ import {
 import { useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import MapViewComponent from "@/components/MapViewComponent";
+import { ProgressCircle } from "react-native-svg-charts";
 import * as Location from "expo-location";
-import MapView, { Marker } from "react-native-maps";
-import { ProgressCircle } from "react-native-svg-charts"; // Use this for speedometer-like gauges
-
 import icons from "@/constants/icons";
-
 import Search from "@/components/Search";
 import Filters from "@/components/Filters";
 import NoResults from "@/components/NoResults";
 import { Card } from "@/components/Cards";
-
 import { useAppwrite } from "@/lib/useappwrite";
 import { useGlobalContext } from "@/lib/global-provider";
-import { getLatestProperties, getProperties } from "@/lib/appwrite";
+import { getProperties } from "@/lib/appwrite";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onValue } from "firebase/database";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCERIhE_mz6mX3_-oOAXlalDwyp2548P_Q",
+  authDomain: "test-endurance.firebaseapp.com",
+  databaseURL: "https://test-endurance-default-rtdb.firebaseio.com",
+  projectId: "test-endurance",
+  storageBucket: "test-endurance.firebasestorage.app",
+  messagingSenderId: "969810682887",
+  appId: "1:969810682887:web:7ee34a84248b85622136a2",
+  measurementId: "G-GBVSS29BR0",
+};
+
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
 
 const Home = () => {
   const { user } = useGlobalContext();
-
   const params = useLocalSearchParams<{ query?: string; filter?: string }>();
 
   const { data: properties, refetch, loading } = useAppwrite({
@@ -40,9 +52,16 @@ const Home = () => {
   });
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [safetyScore, setSafetyScore] = useState<number>(45); // Example safety score
-  const [speed, setSpeed] = useState<number>(0); // Placeholder speed value
+  const [locationError, setLocationError] = useState("");
+  const [safetyScore, setSafetyScore] = useState(100);
+  const [speed, setSpeed] = useState(0);
+  const [distance, setDistance] = useState(0);
+  const [mileage, setMileage] = useState(0);
+  const [alerts, setAlerts] = useState<string[]>([]);
+
+  let prevSpeed = 0;
+  let totalDistance = 0;
+  const fuelEfficiencyFactor = 15;
 
   useEffect(() => {
     refetch({
@@ -54,28 +73,81 @@ const Home = () => {
 
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setErrorMsg("Permission to access location was denied");
+        setLocationError("Permission to access location was denied.");
         return;
       }
 
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
-
-      // Set speed if available
-      if (location.coords.speed) {
-        setSpeed(Math.round(location.coords.speed * 3.6)); // Convert m/s to km/h
-      }
+      const currentLocation = await Location.getCurrentPositionAsync({});
+      setLocation(currentLocation);
     })();
   }, []);
 
-  const handleCardPress = (id: string) => router.push(`/parameters/${id}`);
+  useEffect(() => {
+    const sensorRef = ref(database, "sensorData");
+
+    const unsubscribe = onValue(sensorRef, (snapshot) => {
+      const data = snapshot.val();
+
+      if (data) {
+        let latestData = data;
+        if (typeof data === "object" && !data.accelX) {
+          latestData = Object.values(data).pop();
+        }
+
+        const accel = latestData.accelX || 0;
+        const timeInterval = 1; // Assuming 1-second intervals
+
+        // Calculate speed and distance
+        const currentSpeed = prevSpeed + accel * timeInterval;
+        totalDistance += currentSpeed * timeInterval;
+        setSpeed(parseFloat(currentSpeed.toFixed(2)));
+        setDistance(parseFloat(totalDistance.toFixed(2)));
+
+        // Estimate mileage
+        const estimatedMileage = fuelEfficiencyFactor / (Math.abs(accel) + 1);
+        setMileage(parseFloat(estimatedMileage.toFixed(2)));
+
+        // Update safety score
+        const newSafetyScore = Math.max(
+          0,
+          Math.min(100, safetyScore - Math.abs(accel) * 5)
+        );
+        setSafetyScore(newSafetyScore);
+
+        // Add alerts for significant events
+        const updatedAlerts = [];
+        if (Math.abs(accel) > 2) updatedAlerts.push("High acceleration detected!");
+        if (currentSpeed > 120) updatedAlerts.push("Overspeeding detected!");
+        setAlerts(updatedAlerts);
+
+        prevSpeed = currentSpeed;
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const getProgressColor = (progress: number) => {
     if (progress >= 0.75) return "#4caf50";
     if (progress > 0.60) return "yellow";
     return "red";
+  };
+
+  const getEmoji = (progress: number) => {
+    if (progress >= 0.75) return "😊";
+    if (progress > 0.50) return "😟";
+    return "☠️";
+  };
+
+  const handleCardPress = (id: string) => router.push(`/parameters/${id}`);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12 && hour > 5) return "Good Morning";
+    if (hour < 18 && hour >= 12) return "Good Afternoon";
+    return "Good Evening";
   };
 
   return (
@@ -99,7 +171,6 @@ const Home = () => {
         }
         ListHeaderComponent={() => (
           <View className="px-5">
-            {/* Greeting Section */}
             <View className="flex flex-row items-center justify-between mt-5">
               <View className="flex flex-row">
                 <Image
@@ -108,7 +179,7 @@ const Home = () => {
                 />
                 <View className="flex flex-col items-start ml-2 justify-center">
                   <Text className="text-xs font-rubik text-black-100">
-                    Good Morning
+                    {getGreeting()}
                   </Text>
                   <Text className="text-base font-rubik-medium text-black-300">
                     {user?.name}
@@ -117,69 +188,68 @@ const Home = () => {
               </View>
               <Image source={icons.bell} className="size-6" />
             </View>
-
             <Search />
-
-            {/* Map Section */}
             <View className="my-5">
               <Text className="text-xl font-rubik-bold text-black-300">
-                Most Important Parameters
+                Current Location
               </Text>
-              {location ? (
-                <MapView
-                  style={{ width: "100%", height: 200, marginTop: 10 }}
-                  initialRegion={{
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
+              <MapViewComponent
+                location={location}
+                errorMsg={locationError || "Location unavailable"}
+              />
+            </View>
+            <View className="flex flex-col items-center mt-5">
+              <ProgressCircle
+                style={{ height: 150, width: 150 }}
+                progress={safetyScore / 100}
+                progressColor={getProgressColor(safetyScore / 100)}
+                backgroundColor={"#e0e0e0"}
+                startAngle={-Math.PI * 0.8}
+                endAngle={Math.PI * 0.8}
+              >
+                <Text
+                  style={{
+                    position: "relative",
+                    left: "90%",
+                    top: "0%",
+                    transform: [{ translateX: "-50%" }, { translateY: "35%" }],
                   }}
+                  className="text-3xl"
                 >
-                  <Marker
-                    coordinate={{
-                      latitude: location.coords.latitude,
-                      longitude: location.coords.longitude,
-                    }}
-                    title="You are here"
-                    image={icons.carPark}
-                  />
-                </MapView>
-              ) : errorMsg ? (
-                <Text className="text-base font-rubik text-red-500 mt-5">
-                  {errorMsg}
+                  {getEmoji(safetyScore / 100)}
                 </Text>
-              ) : (
-                <ActivityIndicator
-                  size="large"
-                  className="text-primary-300 mt-5"
-                />
-              )}
-
-              {/* Safety Score and Speed Section */}
-              <View className="flex flex-col items-center mt-5">
-                <ProgressCircle
-                  style={{ height: 150, width: 150 }}
-                  progress={safetyScore / 100}
-                  progressColor={getProgressColor(safetyScore / 100)}
-                  backgroundColor={"#e0e0e0"}
-                  startAngle={-Math.PI * 0.8}
-                  endAngle={Math.PI * 0.8}
-                />
-                <Text className="text-xl font-rubik-bold text-black-300 mt-3">
-                  Safety Score: {safetyScore}%
+              </ProgressCircle>
+              <Text className="text-xl font-rubik-bold text-black-300 mt-3">
+                Safety Score: {safetyScore}%
+              </Text>
+              <View className="flex flex-row items-center justify-between mt-3 w-full px-5">
+                <Text className="text-base font-rubik-medium text-black-300">
+                  Speed: {speed} m/s
                 </Text>
-                <View className="flex flex-row items-center justify-between mt-3 w-full px-5">
-                  <Text className="text-base font-rubik-medium text-black-300">
-                    Speed: {speed} km/h
+                <Text className="text-base font-rubik-medium text-black-300">
+                  Mileage: {mileage} km/l
+                </Text>
+              </View>
+              <View className="mt-5 w-full px-5">
+                <Text className="text-xl font-rubik-bold text-black-300">
+                  Real-time Alerts
+                </Text>
+                {alerts.length > 0 ? (
+                  alerts.map((alert, index) => (
+                    <Text
+                      key={index}
+                      className="text-base font-rubik-medium text-red-500 mt-2"
+                    >
+                      {alert}
+                    </Text>
+                  ))
+                ) : (
+                  <Text className="text-base font-rubik-medium text-black-300 mt-2">
+                    No alerts
                   </Text>
-                  <Text className="text-base font-rubik-medium text-black-300">
-                    Mileage: -- km/l
-                  </Text>
-                </View>
+                )}
               </View>
             </View>
-
-            {/* Recommendation Section */}
             <View className="mt-5">
               <View className="flex flex-row items-center justify-between">
                 <Text className="text-xl font-rubik-bold text-black-300">
