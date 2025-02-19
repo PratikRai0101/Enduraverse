@@ -11,6 +11,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import MapView, { Marker } from "react-native-maps";
+import { ProgressCircle } from "react-native-svg-charts"; // Use this for speedometer-like gauges
 
 import icons from "@/constants/icons";
 
@@ -40,6 +41,8 @@ const Home = () => {
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [safetyScore, setSafetyScore] = useState<number>(45); // Example safety score
+  const [speed, setSpeed] = useState<number>(0); // Placeholder speed value
 
   useEffect(() => {
     refetch({
@@ -59,10 +62,21 @@ const Home = () => {
 
       let location = await Location.getCurrentPositionAsync({});
       setLocation(location);
+
+      // Set speed if available
+      if (location.coords.speed) {
+        setSpeed(Math.round(location.coords.speed * 3.6)); // Convert m/s to km/h
+      }
     })();
   }, []);
 
   const handleCardPress = (id: string) => router.push(`/parameters/${id}`);
+
+  const getProgressColor = (progress: number) => {
+    if (progress >= 0.75) return "#4caf50";
+    if (progress > 0.60) return "yellow";
+    return "red";
+  };
 
   return (
     <SafeAreaView className="h-full bg-white">
@@ -140,6 +154,29 @@ const Home = () => {
                   className="text-primary-300 mt-5"
                 />
               )}
+
+              {/* Safety Score and Speed Section */}
+              <View className="flex flex-col items-center mt-5">
+                <ProgressCircle
+                  style={{ height: 150, width: 150 }}
+                  progress={safetyScore / 100}
+                  progressColor={getProgressColor(safetyScore / 100)}
+                  backgroundColor={"#e0e0e0"}
+                  startAngle={-Math.PI * 0.8}
+                  endAngle={Math.PI * 0.8}
+                />
+                <Text className="text-xl font-rubik-bold text-black-300 mt-3">
+                  Safety Score: {safetyScore}%
+                </Text>
+                <View className="flex flex-row items-center justify-between mt-3 w-full px-5">
+                  <Text className="text-base font-rubik-medium text-black-300">
+                    Speed: {speed} km/h
+                  </Text>
+                  <Text className="text-base font-rubik-medium text-black-300">
+                    Mileage: -- km/l
+                  </Text>
+                </View>
+              </View>
             </View>
 
             {/* Recommendation Section */}
