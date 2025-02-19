@@ -58,10 +58,20 @@ const TabsLayout = () => {
       <Tabs.Screen
         name="explore"
         options={{
-          title: "Explore",
+          title: "History",
           headerShown: false,
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.search} title="Explore" />
+            <TabIcon focused={focused} icon={icons.calendar} title="History" />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="parameters" // Corrected route name
+        options={{
+          title: "Safety Parameters",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.shield} title="Safety" />
           ),
         }}
       />
