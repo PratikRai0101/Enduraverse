@@ -9,7 +9,7 @@ class SessionDataScreen extends StatefulWidget {
   final String sessionId;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  SessionDataScreen(this.userId, this.sessionId);
+  SessionDataScreen(this.userId, this.sessionId, {super.key});
 
   @override
   _SessionDataScreenState createState() => _SessionDataScreenState();
@@ -35,7 +35,9 @@ class _SessionDataScreenState extends State<SessionDataScreen> {
 
     // Only filter coordinates but keep all data for graph usage
     for (var entry in sessionData) {
-      if (!entry["isprev"] && entry["latitude"] != null && entry["longitude"] != null) {
+      if (!entry["isprev"] &&
+          entry["latitude"] != null &&
+          entry["longitude"] != null) {
         newPath.add(LatLng(entry["latitude"], entry["longitude"]));
       }
     }
@@ -50,7 +52,6 @@ class _SessionDataScreenState extends State<SessionDataScreen> {
       });
     }
   }
-
 
   Widget _buildGraphCard(String title, List<LineChartBarData> lineBarsData) {
     return Card(
@@ -106,13 +107,10 @@ class _SessionDataScreenState extends State<SessionDataScreen> {
 
   List<FlSpot> _generateSpots(String key) {
     if (sessionData.isEmpty) return [];
-    return List.generate(
-      sessionData.length,
-          (index) {
-        var value = sessionData[index][key];
-        return FlSpot(index.toDouble(), value?.toDouble() ?? 0);
-      },
-    );
+    return List.generate(sessionData.length, (index) {
+      var value = sessionData[index][key];
+      return FlSpot(index.toDouble(), value?.toDouble() ?? 0);
+    });
   }
 
   @override
@@ -134,18 +132,64 @@ class _SessionDataScreenState extends State<SessionDataScreen> {
                 _buildAreaChartData(_generateSpots("gyro_z"), Colors.red),
               ]),
               _buildGraphCard("Velocity", [
-                _buildAreaChartData(_generateSpots("velocity_x"), Colors.yellow),
+                _buildAreaChartData(
+                  _generateSpots("velocity_x"),
+                  Colors.yellow,
+                ),
               ]),
               _buildGraphCard("MPU Temp", [
                 _buildAreaChartData(_generateSpots("mpu_temp"), Colors.orange),
               ]),
             ],
             if (_mapVisible)
-              Container(height: 300, child: FlutterMap(mapController: _mapController, options: MapOptions(initialCenter: _pathCoordinates.isNotEmpty ? _pathCoordinates.first : LatLng(0.0, 0.0), initialZoom: 18), children: [TileLayer(urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"), if (_pathCoordinates.isNotEmpty) PolylineLayer(polylines: [Polyline(points: _pathCoordinates, strokeWidth: 8.0, color: Colors.blue)])]))
+              SizedBox(
+                height: 300,
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter:
+                        _pathCoordinates.isNotEmpty
+                            ? _pathCoordinates.first
+                            : LatLng(0.0, 0.0),
+                    initialZoom: 18,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    ),
+                    if (_pathCoordinates.isNotEmpty)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: _pathCoordinates,
+                            strokeWidth: 8.0,
+                            color: Colors.blue,
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              )
             else
-              Container(height: 30, alignment: Alignment.center, child: Text("No Map Data Available", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+              Container(
+                height: 30,
+                alignment: Alignment.center,
+                child: Text(
+                  "No Map Data Available",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
             StreamBuilder<QuerySnapshot>(
-              stream: widget._firestore.collection("users").doc(widget.userId).collection("sessions").doc(widget.sessionId).collection("session_data").orderBy("timestamp", descending: true).snapshots(),
+              stream:
+                  widget._firestore
+                      .collection("users")
+                      .doc(widget.userId)
+                      .collection("sessions")
+                      .doc(widget.sessionId)
+                      .collection("session_data")
+                      .orderBy("timestamp", descending: true)
+                      .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(child: CircularProgressIndicator());
@@ -168,18 +212,45 @@ class _SessionDataScreenState extends State<SessionDataScreen> {
                       elevation: 3,
                       margin: EdgeInsets.symmetric(vertical: 8),
                       child: ListTile(
-                        title: Text("Session Data Record", style: TextStyle(fontWeight: FontWeight.bold)),
+                        title: Text(
+                          "Session Data Record",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("Acceleration Mag: ${data["accel_mag"]}", style: TextStyle(color: Colors.black)),
-                            Text("Gyro Mag: ${data["gyro_mag"]}", style: TextStyle(color: Colors.black)),
-                            Text("Jerk Z: ${data["jerk_z"]}", style: TextStyle(color: Colors.black)),
-                            Text("MPU Temp: ${data["mpu_temp"]}", style: TextStyle(color: Colors.black)),
-                            Text("Pitch: ${data["pitch"]}, Roll: ${data["roll"]}, Yaw: ${data["yaw"]}", style: TextStyle(color: Colors.black)),
-                            Text("Velocity X: ${data["velocity_x"]}", style: TextStyle(color: Colors.black)),
-                            Text("Speed Breaker: ${data["speed_breaker"] ? "Yes" : "No"}", style: TextStyle(color: Colors.black)),
-                            Text("Accident: ${data["accident"] ? "Yes" : "No"}", style: TextStyle(color: Colors.black)),
+                            Text(
+                              "Acceleration Mag: ${data["accel_mag"]}",
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            Text(
+                              "Gyro Mag: ${data["gyro_mag"]}",
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            Text(
+                              "Jerk Z: ${data["jerk_z"]}",
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            Text(
+                              "MPU Temp: ${data["mpu_temp"]}",
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            Text(
+                              "Pitch: ${data["pitch"]}, Roll: ${data["roll"]}, Yaw: ${data["yaw"]}",
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            Text(
+                              "Velocity X: ${data["velocity_x"]}",
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            Text(
+                              "Speed Breaker: ${data["speed_breaker"] ? "Yes" : "No"}",
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            Text(
+                              "Accident: ${data["accident"] ? "Yes" : "No"}",
+                              style: TextStyle(color: Colors.black),
+                            ),
                           ],
                         ),
                       ),

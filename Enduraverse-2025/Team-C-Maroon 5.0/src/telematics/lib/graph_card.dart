@@ -8,11 +8,11 @@ class GraphCard extends StatefulWidget {
   final Color color;
 
   const GraphCard({
-    Key? key,
+    super.key,
     required this.title,
     required this.initialData,
     required this.color,
-  }) : super(key: key);
+  });
 
   @override
   _GraphCardState createState() => _GraphCardState();

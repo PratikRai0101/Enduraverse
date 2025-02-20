@@ -7,20 +7,23 @@ class SensorGraph extends StatelessWidget {
   final double minY, maxY;
 
   const SensorGraph({
-    Key? key,
+    super.key,
     required this.title,
     required this.x,
     required this.y,
     required this.z,
     required this.minY,
     required this.maxY,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     if (x.isEmpty || y.isEmpty || z.isEmpty) {
       return Center(
-        child: Text("Waiting for data...", style: TextStyle(color: Colors.white)),
+        child: Text(
+          "Waiting for data...",
+          style: TextStyle(color: Colors.white),
+        ),
       );
     }
 
@@ -77,10 +80,7 @@ class SensorGraph extends StatelessWidget {
       belowBarData: BarAreaData(
         show: true,
         gradient: LinearGradient(
-          colors: [
-            color.withOpacity(0.3),
-            Colors.transparent,
-          ],
+          colors: [color.withOpacity(0.3), Colors.transparent],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),

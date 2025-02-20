@@ -9,6 +9,8 @@ import 'bluetooth_scan_modal.dart';
 import 'package:lottie/lottie.dart';
 
 class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
   @override
   _DashboardScreenState createState() => _DashboardScreenState();
 }
@@ -25,13 +27,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _requestBluetoothPermissions() async {
-    Map<Permission, PermissionStatus> statuses = await [
-      Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.bluetoothAdvertise,
-      Permission.locationWhenInUse,
-    ].request();
+    Map<Permission, PermissionStatus> statuses =
+        await [
+          Permission.bluetooth,
+          Permission.bluetoothScan,
+          Permission.bluetoothConnect,
+          Permission.bluetoothAdvertise,
+          Permission.locationWhenInUse,
+        ].request();
   }
 
   Future<void> _openBluetoothModal() async {
@@ -53,11 +56,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               StreamBuilder<QuerySnapshot>(
-                stream: _firestore
-                    .collection("users")
-                    .doc(user.uid)
-                    .collection("family")
-                    .snapshots(),
+                stream:
+                    _firestore
+                        .collection("users")
+                        .doc(user.uid)
+                        .collection("family")
+                        .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return Center(child: CircularProgressIndicator());
@@ -68,15 +72,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   var familyDocs = snapshot.data!.docs;
                   return Column(
-                    children: familyDocs.map((doc) {
-                      return ListTile(
-                        title: Text(doc["email"]),
-                        trailing: IconButton(
-                          icon: Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteFamilyMember(doc.id),
-                        ),
-                      );
-                    }).toList(),
+                    children:
+                        familyDocs.map((doc) {
+                          return ListTile(
+                            title: Text(doc["email"]),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteFamilyMember(doc.id),
+                            ),
+                          );
+                        }).toList(),
                   );
                 },
               ),
@@ -113,11 +118,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     User? user = _auth.currentUser;
     if (user == null) return;
 
-    await _firestore
-        .collection("users")
-        .doc(user.uid)
-        .collection("family")
-        .add({"email": email});
+    await _firestore.collection("users").doc(user.uid).collection("family").add(
+      {"email": email},
+    );
   }
 
   Future<void> _deleteFamilyMember(String docId) async {
@@ -202,77 +205,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
             SizedBox(height: 10),
 
             Expanded(
-              child: user == null
-                  ? Center(child: Text("User not logged in"))
-                  : StreamBuilder<QuerySnapshot>(
-                stream: _firestore
-                    .collection("users")
-                    .doc(user.uid)
-                    .collection("sessions")
-                    .orderBy("created_at", descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState ==
-                      ConnectionState.waiting) {
-                    return Center(child: CircularProgressIndicator());
-                  }
+              child:
+                  user == null
+                      ? Center(child: Text("User not logged in"))
+                      : StreamBuilder<QuerySnapshot>(
+                        stream:
+                            _firestore
+                                .collection("users")
+                                .doc(user.uid)
+                                .collection("sessions")
+                                .orderBy("created_at", descending: true)
+                                .snapshots(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return Center(child: CircularProgressIndicator());
+                          }
 
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Lottie.asset(
-                          'assets/no_data.json', // Lottie animation for no sessions
-                          height: 180,
-                          fit: BoxFit.cover,
-                        ),
-                        SizedBox(height: 10),
-                        Text("No sessions found!"),
-                      ],
-                    );
-                  }
-
-                  var sessions = snapshot.data!.docs;
-
-                  return ListView.builder(
-                    itemCount: sessions.length,
-                    itemBuilder: (context, index) {
-                      var session = sessions[index];
-                      return Card(
-                        margin: EdgeInsets.symmetric(vertical: 8),
-                        elevation: 3,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.blue.shade100,
-                            child: Icon(Icons.history, color: Colors.blue),
-                          ),
-                          title: Text("Session ${index + 1}"),
-                          subtitle: Text(
-                            session["created_at"] != null
-                                ? session["created_at"]
-                                .toDate()
-                                .toString()
-                                : "No timestamp",
-                          ),
-                          trailing: Icon(Icons.arrow_forward_ios, size: 16),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => SessionDataScreen(
-                                    user.uid, session.id),
-                              ),
+                          if (!snapshot.hasData ||
+                              snapshot.data!.docs.isEmpty) {
+                            return Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Lottie.asset(
+                                  'assets/no_data.json', // Lottie animation for no sessions
+                                  height: 180,
+                                  fit: BoxFit.cover,
+                                ),
+                                SizedBox(height: 10),
+                                Text("No sessions found!"),
+                              ],
                             );
-                          },
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
+                          }
+
+                          var sessions = snapshot.data!.docs;
+
+                          return ListView.builder(
+                            itemCount: sessions.length,
+                            itemBuilder: (context, index) {
+                              var session = sessions[index];
+                              return Card(
+                                margin: EdgeInsets.symmetric(vertical: 8),
+                                elevation: 3,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: Colors.blue.shade100,
+                                    child: Icon(
+                                      Icons.history,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                  title: Text("Session ${index + 1}"),
+                                  subtitle: Text(
+                                    session["created_at"] != null
+                                        ? session["created_at"]
+                                            .toDate()
+                                            .toString()
+                                        : "No timestamp",
+                                  ),
+                                  trailing: Icon(
+                                    Icons.arrow_forward_ios,
+                                    size: 16,
+                                  ),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder:
+                                            (context) => SessionDataScreen(
+                                              user.uid,
+                                              session.id,
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
             ),
           ],
         ),
