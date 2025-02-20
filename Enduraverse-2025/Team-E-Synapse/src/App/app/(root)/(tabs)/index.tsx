@@ -43,25 +43,27 @@ const dummyParameters = [
     id: "1",
     name: "Brake Efficiency",
     value: "85%",
-    image: "https://via.placeholder.com/150",
+    icon: icons.shield, // Replace with an existing property from the icons object
   },
   {
     id: "2",
     name: "Tire Pressure",
     value: "32 PSI",
-    image: "https://via.placeholder.com/150",
+    icon: icons.wifi, // Replace with an existing property from the icons object
   },
   {
     id: "3",
     name: "Engine Health",
     value: "Good",
-    image: "https://via.placeholder.com/150",
+    icon: icons.carPark,
   },
   {
     id: "4",
     name: "Battery Status",
     value: "75%",
-    image: "https://via.placeholder.com/150",
+    icon: icons.language
+    
+    ,
   },
 ];
 
@@ -72,6 +74,17 @@ const filterParameters = (filter: string) => {
   return dummyParameters.filter((param) =>
     param.name.toLowerCase().includes(filter.toLowerCase())
   );
+};
+
+const alertMessages = [
+  "Please drive carefully!",
+  "Check your vehicle's condition!",
+  "Slow down and stay safe!",
+];
+
+const getRandomAlert = () => {
+  const randomIndex = Math.floor(Math.random() * alertMessages.length);
+  return alertMessages[randomIndex];
 };
 
 const Home = () => {
@@ -144,28 +157,25 @@ const Home = () => {
         }
 
         const accel = latestData.accelX || 0;
-        const timeInterval = 1; // Assuming 1-second intervals
+        const timeInterval = 1;
 
-        // Calculate speed and distance
         const currentSpeed = prevSpeed + accel * timeInterval;
         totalDistance += currentSpeed * timeInterval;
         setDistance(parseFloat(totalDistance.toFixed(2)));
 
-        // Estimate mileage
         const estimatedMileage = fuelEfficiencyFactor / (Math.abs(accel) + 1);
         setMileage(parseFloat(estimatedMileage.toFixed(2)));
 
-        // Update safety score
         const newSafetyScore = Math.max(
           0,
           Math.min(100, safetyScore - Math.abs(accel) * 5)
         );
-        setSafetyScore(newSafetyScore);
+        setSafetyScore(parseFloat(newSafetyScore.toFixed(2)));
 
-        // Add alerts for significant events
         const updatedAlerts = [];
         if (Math.abs(accel) > 2) updatedAlerts.push("High acceleration detected!");
         if (currentSpeed > 120) updatedAlerts.push("Overspeeding detected!");
+        if (newSafetyScore < 50) updatedAlerts.push(getRandomAlert());
         setAlerts(updatedAlerts);
 
         prevSpeed = currentSpeed;
@@ -367,14 +377,14 @@ const Home = () => {
                     onPress={() => handleFilterChange(option)}
                     className={`px-4 py-2 rounded-full ${
                       selectedFilter === option
-                        ? "bg-primary-300"
+                        ? "bg-gray-600"
                         : "bg-gray-200"
                     }`}
                   >
                     <Text
                       className={`text-base font-rubik-bold ${
                         selectedFilter === option
-                          ? "text-white"
+                          ? "text-black-300"
                           : "text-black-300"
                       }`}
                     >
@@ -389,7 +399,7 @@ const Home = () => {
                 renderItem={({ item }) => (
                   <View className="flex flex-col items-center m-2">
                     <Image
-                      source={{ uri: item.image }}
+                      source={item.icon}
                       className="size-24 rounded-full"
                     />
                     <Text className="text-base font-rubik-medium text-black-300 mt-2">

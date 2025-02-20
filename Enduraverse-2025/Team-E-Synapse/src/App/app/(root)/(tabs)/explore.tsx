@@ -25,14 +25,14 @@ const pastRides = [
     id: "1",
     name: "Ride to Downtown",
     date: "2023-10-01",
-    image: "https://via.placeholder.com/150",
+    image: "https://example.com/images/ride1.jpg", // Replace with actual image URL
     mileage: "15 km/l",
   },
   {
     id: "2",
     name: "Ride to Airport",
     date: "2023-09-25",
-    image: "https://via.placeholder.com/150",
+    image: "https://example.com/images/ride2.jpg", // Replace with actual image URL
     mileage: "12 km/l",
   },
 ];
