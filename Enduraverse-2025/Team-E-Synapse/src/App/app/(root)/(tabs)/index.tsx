@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 import { useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
@@ -37,9 +38,53 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
+const dummyParameters = [
+  {
+    id: "1",
+    name: "Brake Efficiency",
+    value: "85%",
+    image: "https://via.placeholder.com/150",
+  },
+  {
+    id: "2",
+    name: "Tire Pressure",
+    value: "32 PSI",
+    image: "https://via.placeholder.com/150",
+  },
+  {
+    id: "3",
+    name: "Engine Health",
+    value: "Good",
+    image: "https://via.placeholder.com/150",
+  },
+  {
+    id: "4",
+    name: "Battery Status",
+    value: "75%",
+    image: "https://via.placeholder.com/150",
+  },
+];
+
+const filterOptions = ["All", "Brake", "Tire", "Engine", "Battery"];
+
+const filterParameters = (filter: string) => {
+  if (!filter || filter === "All") return dummyParameters;
+  return dummyParameters.filter((param) =>
+    param.name.toLowerCase().includes(filter.toLowerCase())
+  );
+};
+
 const Home = () => {
   const { user } = useGlobalContext();
   const params = useLocalSearchParams<{ query?: string; filter?: string }>();
+
+  const [selectedFilter, setSelectedFilter] = useState("All");
+
+  const filteredParameters = filterParameters(selectedFilter);
+
+  const handleFilterChange = (filter: string) => {
+    setSelectedFilter(filter);
+  };
 
   const { data: properties, refetch, loading } = useAppwrite({
     fn: getProperties,
@@ -104,7 +149,6 @@ const Home = () => {
         // Calculate speed and distance
         const currentSpeed = prevSpeed + accel * timeInterval;
         totalDistance += currentSpeed * timeInterval;
-        setSpeed(parseFloat(currentSpeed.toFixed(2)));
         setDistance(parseFloat(totalDistance.toFixed(2)));
 
         // Estimate mileage
@@ -131,6 +175,24 @@ const Home = () => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const locationSubscription = Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.High,
+        timeInterval: 1000,
+        distanceInterval: 1,
+      },
+      (newLocation) => {
+        const { coords } = newLocation;
+        setSpeed(coords.speed || 0);
+      }
+    );
+
+    return () => {
+      locationSubscription.then((subscription) => subscription.remove());
+    };
+  }, []);
+
   const getProgressColor = (progress: number) => {
     if (progress >= 0.75) return "#4caf50";
     if (progress > 0.60) return "yellow";
@@ -155,6 +217,7 @@ const Home = () => {
   const handleStartRecording = () => {
     setIsRecording(true);
     setRideHistory([]);
+    Alert.alert("Journey Started", "Your journey has started.");
   };
 
   const handleStopRecording = () => {
@@ -167,6 +230,7 @@ const Home = () => {
       mileage: `${mileage.toFixed(2)} km/l`,
     };
     setRideHistory((prevHistory) => [...prevHistory, newRide]);
+    Alert.alert("Journey Ended", "Your journey has ended.");
   };
 
   return (
@@ -243,7 +307,7 @@ const Home = () => {
               </Text>
               <View className="flex flex-row items-center justify-between mt-3 w-full px-5">
                 <Text className="text-base font-rubik-medium text-black-300">
-                  Speed: {speed} m/s
+                  Speed: {speed.toFixed(2)} m/s
                 </Text>
                 <Text className="text-base font-rubik-medium text-black-300">
                   Mileage: {mileage} km/l
@@ -288,7 +352,7 @@ const Home = () => {
             <View className="mt-5">
               <View className="flex flex-row items-center justify-between">
                 <Text className="text-xl font-rubik-bold text-black-300">
-                  Our Recommendation
+                  Vehicle Safety Parameters
                 </Text>
                 <TouchableOpacity>
                   <Text className="text-base font-rubik-bold text-primary-300">
@@ -296,7 +360,49 @@ const Home = () => {
                   </Text>
                 </TouchableOpacity>
               </View>
-              <Filters />
+              <View className="flex flex-row justify-around mt-3">
+                {filterOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    onPress={() => handleFilterChange(option)}
+                    className={`px-4 py-2 rounded-full ${
+                      selectedFilter === option
+                        ? "bg-primary-300"
+                        : "bg-gray-200"
+                    }`}
+                  >
+                    <Text
+                      className={`text-base font-rubik-bold ${
+                        selectedFilter === option
+                          ? "text-white"
+                          : "text-black-300"
+                      }`}
+                    >
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <FlatList
+                data={filteredParameters}
+                horizontal
+                renderItem={({ item }) => (
+                  <View className="flex flex-col items-center m-2">
+                    <Image
+                      source={{ uri: item.image }}
+                      className="size-24 rounded-full"
+                    />
+                    <Text className="text-base font-rubik-medium text-black-300 mt-2">
+                      {item.name}
+                    </Text>
+                    <Text className="text-base font-rubik-medium text-black-300">
+                      {item.value}
+                    </Text>
+                  </View>
+                )}
+                keyExtractor={(item) => item.id}
+                showsHorizontalScrollIndicator={false}
+              />
             </View>
           </View>
         )}
