@@ -61,9 +61,7 @@ const dummyParameters = [
     id: "4",
     name: "Battery Status",
     value: "75%",
-    icon: icons.language
-    
-    ,
+    icon: icons.language,
   },
 ];
 

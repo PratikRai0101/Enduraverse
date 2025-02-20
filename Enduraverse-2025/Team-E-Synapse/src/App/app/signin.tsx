@@ -29,7 +29,7 @@ const SignIn = () => {
         renderItem={null}
         ListHeaderComponent={
           <>
-            <Image source={images.onboarding} className="w-full h-4/6" resizeMode="contain"/>
+            <Image source={images.logo} className="w-full h-4/6" resizeMode="contain"/>
             <View className="px-10">
               <Text className="text-base text-center uppercase font-sans font-bold text-black-200 ">WELCOME TO ENDURIDE</Text>
               <Text className="text-3xl font-serif font-bold text-black-300 text-center mt-4">
