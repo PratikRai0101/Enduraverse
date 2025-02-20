@@ -1,0 +1,279 @@
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h>
+#include "SPIFFS.h"
+#include <math.h>
+
+// BLE UUIDs
+#define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
+#define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+#define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+
+// Thresholds for various event detections (adjust these based on calibration)
+#define Z_JERK_THRESHOLD            10.0   // m/s^3 for vertical (speed breaker) detection
+#define ACCIDENT_ACCEL_THRESHOLD    15.0   // m/s^2 for accident detection
+#define HARSH_ACCEL_THRESHOLD       3.0    // m/s^2 for forward acceleration events
+#define HARSH_JERK_THRESHOLD        5.0    // m/s^3 for rapid change (used for acceleration/braking)
+#define HARSH_CORNERING_THRESHOLD   2.0    // m/s^2 for lateral acceleration events
+
+BLEServer *pServer = NULL;
+BLECharacteristic *pTxCharacteristic;
+bool deviceConnected = false;
+bool sendingStoredData = true;  // Flag to indicate if stored data should be sent first
+
+// MPU6050 Sensor
+Adafruit_MPU6050 mpu;
+
+// For stored data
+String currentStoredData = "";
+
+// Variables for orientation and integration
+float yaw = 0.0;
+unsigned long lastTime = 0;
+
+// Variables for acceleration and jerk calculations (for all axes)
+float prevAccelX = 0, prevAccelY = 0, prevAccelZ = 0;
+bool firstMeasurement = true;
+float jerkX = 0, jerkY = 0, jerkZ = 0;
+
+// Variable for velocity estimation (assume X-axis is forward)
+float velocityX = 0.0;   // m/s
+
+class MyServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer *pServer) {
+    deviceConnected = true;
+    Serial.println("Client connected.");
+    lastTime = millis();  // Reset integration timer
+    firstMeasurement = true; // Reset jerk measurement
+    velocityX = 0.0;         // Reset velocity on connection
+  };
+
+  void onDisconnect(BLEServer *pServer) {
+    deviceConnected = false;
+    pServer->getAdvertising()->start();
+    Serial.println("Client disconnected. Waiting for connection...");
+  }
+};
+
+class MyCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic *pCharacteristic) {
+    String rxValue = pCharacteristic->getValue();
+    if (rxValue.length() > 0) {
+      Serial.println("* Received Value: " + rxValue + " *");
+    }
+  }
+};
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Starting BLE & MPU6050 for Driver Behavior Analysis...");
+
+  // Initialize SPIFFS for local data storage
+  if (!SPIFFS.begin(true)) {  
+    Serial.println("SPIFFS Mount Failed!");
+  } else {
+    Serial.println("SPIFFS Mounted Successfully.");
+  }
+
+  // Initialize BLE
+  BLEDevice::init("ESP32_BLE_MPU6050");
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  pTxCharacteristic = pService->createCharacteristic(
+    CHARACTERISTIC_UUID_TX,
+    BLECharacteristic::PROPERTY_NOTIFY
+  );
+  pTxCharacteristic->addDescriptor(new BLE2902());
+
+  BLECharacteristic *pRxCharacteristic = pService->createCharacteristic(
+    CHARACTERISTIC_UUID_RX,
+    BLECharacteristic::PROPERTY_WRITE
+  );
+  pRxCharacteristic->setCallbacks(new MyCallbacks());
+
+  pService->start();
+  pServer->getAdvertising()->start();
+  Serial.println("Waiting for client connection...");
+
+  // Initialize MPU6050 sensor
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 sensor!");
+    while (1) delay(10);
+  }
+  Serial.println("MPU6050 Found!");
+
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+  lastTime = millis();
+  delay(100);
+}
+
+void sendStoredData() {
+  File file = SPIFFS.open("/sensor_data.txt", "r");
+  if (!file) {
+    Serial.println("No stored data found in SPIFFS.");
+    sendingStoredData = false;
+    return;
+  }
+  currentStoredData = file.readStringUntil('\n');  // Read one line at a time
+  file.close();
+
+  if (currentStoredData.length() > 0) {
+    Serial.println("Preparing stored data for sending: " + currentStoredData);
+  } else {
+    sendingStoredData = false;  // No more stored data, allow live data transmission
+  }
+}
+
+void clearSentData() {
+  File file = SPIFFS.open("/sensor_data.txt", "r");
+  if (!file) {
+    Serial.println("Failed to open SPIFFS file for clearing.");
+    return;
+  }
+
+  String remainingData = "";
+  bool skipFirstLine = true;
+  
+  while (file.available()) {
+    String line = file.readStringUntil('\n');
+    if (skipFirstLine) {
+      skipFirstLine = false;
+      continue;
+    }
+    remainingData += line + "\n";
+  }
+  file.close();
+
+  file = SPIFFS.open("/sensor_data.txt", "w");
+  if (!file) {
+    Serial.println("Failed to overwrite SPIFFS file.");
+    return;
+  }
+  file.print(remainingData);
+  file.close();
+
+  Serial.println("Cleared sent data from SPIFFS.");
+}
+
+void storeData(String data) {
+  File file = SPIFFS.open("/sensor_data.txt", "a");
+  if (!file) {
+    Serial.println("Failed to open SPIFFS file for writing.");
+    return;
+  }
+  file.println(data);
+  file.close();
+}
+
+void loop() {
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  unsigned long currentTime = millis();
+  float dt = (currentTime - lastTime) / 1000.0;  // dt in seconds
+  lastTime = currentTime;
+
+  // --- Calculate Accelerometer and Gyroscope Magnitudes ---
+  float accelMag = sqrt(pow(a.acceleration.x, 2) +
+                        pow(a.acceleration.y, 2) +
+                        pow(a.acceleration.z, 2));
+  float gyroMag = sqrt(pow(g.gyro.x, 2) +
+                       pow(g.gyro.y, 2) +
+                       pow(g.gyro.z, 2));
+
+  // --- Calculate Orientation (Pitch, Roll) ---
+  float pitch = atan2(a.acceleration.x, 
+                      sqrt(pow(a.acceleration.y, 2) + pow(a.acceleration.z, 2))) * 180.0 / PI;
+  float roll  = atan2(a.acceleration.y, 
+                      sqrt(pow(a.acceleration.x, 2) + pow(a.acceleration.z, 2))) * 180.0 / PI;
+  // Update yaw by integrating gyro Z-axis (assuming g.gyro.z in rad/s)
+  yaw += (g.gyro.z * dt * 180.0 / PI);
+  if (yaw >= 360) yaw -= 360;
+  if (yaw < 0) yaw += 360;
+
+  // --- Jerk Calculation for All Axes (m/s^3) ---
+  if (!firstMeasurement) {
+    jerkX = (a.acceleration.x - prevAccelX) / dt;
+    jerkY = (a.acceleration.y - prevAccelY) / dt;
+    jerkZ = (a.acceleration.z - prevAccelZ) / dt;
+  } else {
+    firstMeasurement = false;
+  }
+  prevAccelX = a.acceleration.x;
+  prevAccelY = a.acceleration.y;
+  prevAccelZ = a.acceleration.z;
+
+  // --- Velocity Estimation (Forward - X-axis) ---
+  velocityX += a.acceleration.x * dt;  // integrate acceleration to get velocity
+
+  // --- Event Detection for Driver Behavior ---
+  // Harsh acceleration or braking on X-axis
+  bool harshAcceleration = (a.acceleration.x > HARSH_ACCEL_THRESHOLD) || (jerkX > HARSH_JERK_THRESHOLD);
+  bool harshBraking      = (a.acceleration.x < -HARSH_ACCEL_THRESHOLD) || (jerkX < -HARSH_JERK_THRESHOLD);
+  // Harsh cornering based on lateral (Y-axis) acceleration
+  bool harshCornering    = (fabs(a.acceleration.y) > HARSH_CORNERING_THRESHOLD) || (fabs(jerkY) > (HARSH_JERK_THRESHOLD / 2));
+  
+  // --- Accident Detection (Using Overall Acceleration Magnitude) ---
+  bool accidentDetected = (accelMag > ACCIDENT_ACCEL_THRESHOLD);
+
+  // --- Build JSON-like Data String ---
+  String dataToSend = "{";
+  dataToSend += "\"accel_x\":" + String(a.acceleration.x, 2) + ",";
+  dataToSend += "\"accel_y\":" + String(a.acceleration.y, 2) + ",";
+  dataToSend += "\"accel_z\":" + String(a.acceleration.z, 2) + ",";
+  dataToSend += "\"accel_mag\":" + String(accelMag, 2) + ",";
+  dataToSend += "\"gyro_x\":" + String(g.gyro.x, 2) + ",";
+  dataToSend += "\"gyro_y\":" + String(g.gyro.y, 2) + ",";
+  dataToSend += "\"gyro_z\":" + String(g.gyro.z, 2) + ",";
+  dataToSend += "\"gyro_mag\":" + String(gyroMag, 2) + ",";
+  dataToSend += "\"pitch\":" + String(pitch, 2) + ",";
+  dataToSend += "\"roll\":" + String(roll, 2) + ",";
+  dataToSend += "\"yaw\":" + String(yaw, 2) + ",";
+  dataToSend += "\"jerk_x\":" + String(jerkX, 2) + ",";
+  dataToSend += "\"jerk_y\":" + String(jerkY, 2) + ",";
+  dataToSend += "\"jerk_z\":" + String(jerkZ, 2) + ",";
+  dataToSend += "\"velocity_x\":" + String(velocityX, 2) + ",";
+  dataToSend += "\"harsh_acceleration\":" + String(harshAcceleration ? "true" : "false") + ",";
+  dataToSend += "\"harsh_braking\":" + String(harshBraking ? "true" : "false") + ",";
+  dataToSend += "\"harsh_cornering\":" + String(harshCornering ? "true" : "false") + ",";
+  dataToSend += "\"accident\":" + String(accidentDetected ? "true" : "false") + ",";
+  dataToSend += "\"mpu_temp\":" + String(temp.temperature, 2) + ",";
+  dataToSend += "\"isprev\": " + String(deviceConnected ? "false" : "true");
+  dataToSend += "}";
+
+  // --- BLE Transmission or Local Storage ---
+  if (deviceConnected) {
+    if (sendingStoredData) {
+      if (currentStoredData == "") { 
+        sendStoredData(); 
+      }
+      if (currentStoredData.length() > 0) {
+        Serial.println("Sending stored data: " + currentStoredData);
+        pTxCharacteristic->setValue(currentStoredData.c_str());
+        pTxCharacteristic->notify();
+        delay(100);
+        clearSentData();
+        currentStoredData = "";
+      }
+    } else {
+      Serial.println("Sending live data: " + dataToSend);
+      pTxCharacteristic->setValue(dataToSend.c_str());
+      pTxCharacteristic->notify();
+      delay(2000); // Adjust delay as needed
+    }
+  } else {
+    Serial.println("Device disconnected, storing data: " + dataToSend);
+    storeData(dataToSend);
+    sendingStoredData = true;
+    delay(2000); // Prevent frequent writes
+  }
+}
