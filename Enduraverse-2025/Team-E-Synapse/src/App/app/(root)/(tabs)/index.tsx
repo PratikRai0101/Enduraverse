@@ -85,6 +85,25 @@ const getRandomAlert = () => {
   return alertMessages[randomIndex];
 };
 
+// Dummy blockchain functions
+const connectToBlockchain = () => {
+  console.log("Connecting to blockchain...");
+  // Simulate blockchain connection
+  return new Promise((resolve) => setTimeout(resolve, 1000));
+};
+
+const recordDataOnBlockchain = (data: any) => {
+  console.log("Recording data on blockchain:", data);
+  // Simulate recording data on blockchain
+  return new Promise((resolve) => setTimeout(resolve, 1000));
+};
+
+const verifyDataOnBlockchain = (data: any) => {
+  console.log("Verifying data on blockchain:", data);
+  // Simulate verifying data on blockchain
+  return new Promise((resolve) => setTimeout(resolve, 1000));
+};
+
 const Home = () => {
   const { user } = useGlobalContext();
   const params = useLocalSearchParams<{ query?: string; filter?: string }>();
@@ -201,6 +220,15 @@ const Home = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const initializeBlockchain = async () => {
+      await connectToBlockchain();
+      console.log("Blockchain connected.");
+    };
+
+    initializeBlockchain();
+  }, []);
+
   const getProgressColor = (progress: number) => {
     if (progress >= 0.75) return "#4caf50";
     if (progress > 0.60) return "yellow";
@@ -222,13 +250,14 @@ const Home = () => {
     return "Good Evening";
   };
 
-  const handleStartRecording = () => {
+  const handleStartRecording = async () => {
     setIsRecording(true);
     setRideHistory([]);
+    await recordDataOnBlockchain({ event: "Journey Started" });
     Alert.alert("Journey Started", "Your journey has started.");
   };
 
-  const handleStopRecording = () => {
+  const handleStopRecording = async () => {
     setIsRecording(false);
     const newRide = {
       id: (rideHistory.length + 1).toString(),
@@ -238,6 +267,7 @@ const Home = () => {
       mileage: `${mileage.toFixed(2)} km/l`,
     };
     setRideHistory((prevHistory) => [...prevHistory, newRide]);
+    await recordDataOnBlockchain({ event: "Journey Ended", ride: newRide });
     Alert.alert("Journey Ended", "Your journey has ended.");
   };
 
