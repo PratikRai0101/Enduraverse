@@ -5,7 +5,8 @@ import 'auth_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'session_data_screen.dart';
-import 'bluetooth_scan_modal.dart'; // Import BLE scanner modal
+import 'bluetooth_scan_modal.dart';
+import 'package:lottie/lottie.dart';
 
 class DashboardScreen extends StatefulWidget {
   @override
@@ -20,85 +21,115 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _requestBluetoothPermissions(); // Ensure permissions on startup
+    _requestBluetoothPermissions();
   }
 
-  // Request necessary Bluetooth & Nearby Devices permissions
   Future<void> _requestBluetoothPermissions() async {
     Map<Permission, PermissionStatus> statuses = await [
       Permission.bluetooth,
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
       Permission.bluetoothAdvertise,
-      Permission.locationWhenInUse, // Required for BLE scanning
+      Permission.locationWhenInUse,
     ].request();
-
-    statuses.forEach((permission, status) {
-      debugPrint("🔹 $permission: $status");
-    });
-
-    if (statuses[Permission.bluetoothScan]?.isDenied ?? true) {
-      debugPrint("⚠️ Bluetooth Scan permission denied");
-    }
-    if (statuses[Permission.bluetoothConnect]?.isDenied ?? true) {
-      debugPrint("⚠️ Bluetooth Connect permission denied");
-    }
-    if (statuses[Permission.bluetoothAdvertise]?.isDenied ?? true) {
-      debugPrint("⚠️ Bluetooth Advertise permission denied");
-    }
-    if (statuses[Permission.locationWhenInUse]?.isDenied ?? true) {
-      debugPrint("⚠️ Location permission denied");
-    }
   }
 
-  // Add a new session to Firestore
-  Future<void> _addSession() async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      try {
-        DocumentReference sessionRef = await _firestore
-            .collection("users")
-            .doc(user.uid)
-            .collection("sessions")
-            .add({
-          "created_at": FieldValue.serverTimestamp(),
-        });
-
-        // Sample Session Data
-        await sessionRef.collection("session_data").add({
-          "accel_x": 0.54,
-          "accel_y": -9.89,
-          "accel_z": 3.02,
-          "gyro_x": -0.06,
-          "gyro_y": -0.03,
-          "gyro_z": -0.02,
-          "mpu_temp": 28.11,
-          "pitch": -72.77,
-          "roll": -3.01,
-          "yaw": -3.51,
-          "vel_x": 1.66,
-          "vel_y": -30.81,
-          "vel_z": 9.42,
-          "disp_x": 3.99,
-          "disp_y": -74.56,
-          "disp_z": 22.80,
-          "jerk_x": 0.02,
-          "jerk_y": -0.02,
-          "jerk_z": -0.00,
-          "speedbreaker": 0,
-        });
-
-        debugPrint("✅ New session created successfully!");
-      } catch (e) {
-        debugPrint("⚠️ Failed to create session: $e");
-      }
-    }
-  }
-
-  // Open Bluetooth Scan Modal after ensuring permissions
   Future<void> _openBluetoothModal() async {
-    await _requestBluetoothPermissions(); // Request permissions before scanning
+    await _requestBluetoothPermissions();
     showScanModal(context);
+  }
+
+  Future<void> _manageFamilyDialog() async {
+    TextEditingController emailController = TextEditingController();
+    User? user = _auth.currentUser;
+    if (user == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Manage Family Members"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              StreamBuilder<QuerySnapshot>(
+                stream: _firestore
+                    .collection("users")
+                    .doc(user.uid)
+                    .collection("family")
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Text("No family members added.");
+                  }
+
+                  var familyDocs = snapshot.data!.docs;
+                  return Column(
+                    children: familyDocs.map((doc) {
+                      return ListTile(
+                        title: Text(doc["email"]),
+                        trailing: IconButton(
+                          icon: Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _deleteFamilyMember(doc.id),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+              SizedBox(height: 10),
+              TextField(
+                controller: emailController,
+                decoration: InputDecoration(
+                  hintText: "Enter email",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () {
+                _addFamilyMember(emailController.text.trim());
+                Navigator.pop(context);
+              },
+              child: Text("Add"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _addFamilyMember(String email) async {
+    if (email.isEmpty) return;
+    User? user = _auth.currentUser;
+    if (user == null) return;
+
+    await _firestore
+        .collection("users")
+        .doc(user.uid)
+        .collection("family")
+        .add({"email": email});
+  }
+
+  Future<void> _deleteFamilyMember(String docId) async {
+    User? user = _auth.currentUser;
+    if (user == null) return;
+
+    await _firestore
+        .collection("users")
+        .doc(user.uid)
+        .collection("family")
+        .doc(docId)
+        .delete();
   }
 
   @override
@@ -107,10 +138,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Dashboard"),
+        title: Row(
+          children: [
+            Icon(Icons.dashboard, size: 26),
+            SizedBox(width: 8),
+            Text("Dashboard", style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: Icon(Icons.logout),
             onPressed: () async {
               await _authService.signOut();
               Navigator.pushReplacement(
@@ -124,34 +161,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Your Sessions",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            Text(
+              "Welcome, ${user?.email ?? 'User'} 👋",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
 
             // Buttons Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ElevatedButton(
-                  onPressed: _addSession,
-                  child: const Text("Create New Session"),
+                ElevatedButton.icon(
+                  onPressed: _openBluetoothModal,
+                  icon: Icon(Icons.bluetooth, size: 22),
+                  label: Text("Connect"),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
                 ),
-                ElevatedButton(
-                  onPressed: _openBluetoothModal, // Opens Bluetooth scanner with permissions check
-                  child: const Text("Connect"),
+                ElevatedButton.icon(
+                  onPressed: _manageFamilyDialog,
+                  icon: Icon(Icons.family_restroom, size: 22),
+                  label: Text("Manage Family"),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
 
-            // Fetch and display user sessions from Firestore
+            // User Sessions
+            Text(
+              "Your Sessions",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 10),
+
             Expanded(
               child: user == null
-                  ? const Center(child: Text("User not logged in"))
+                  ? Center(child: Text("User not logged in"))
                   : StreamBuilder<QuerySnapshot>(
                 stream: _firestore
                     .collection("users")
@@ -160,12 +212,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     .orderBy("created_at", descending: true)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                  if (snapshot.connectionState ==
+                      ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
                   }
 
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text("No sessions found!"));
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Lottie.asset(
+                          'assets/no_data.json', // Lottie animation for no sessions
+                          height: 180,
+                          fit: BoxFit.cover,
+                        ),
+                        SizedBox(height: 10),
+                        Text("No sessions found!"),
+                      ],
+                    );
                   }
 
                   var sessions = snapshot.data!.docs;
@@ -175,20 +239,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     itemBuilder: (context, index) {
                       var session = sessions[index];
                       return Card(
+                        margin: EdgeInsets.symmetric(vertical: 8),
+                        elevation: 3,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: ListTile(
-                          leading: const Icon(Icons.history),
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.blue.shade100,
+                            child: Icon(Icons.history, color: Colors.blue),
+                          ),
                           title: Text("Session ${index + 1}"),
                           subtitle: Text(
                             session["created_at"] != null
-                                ? session["created_at"].toDate().toString()
+                                ? session["created_at"]
+                                .toDate()
+                                .toString()
                                 : "No timestamp",
                           ),
+                          trailing: Icon(Icons.arrow_forward_ios, size: 16),
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>
-                                    SessionDataScreen(user.uid, session.id),
+                                builder: (context) => SessionDataScreen(
+                                    user.uid, session.id),
                               ),
                             );
                           },
