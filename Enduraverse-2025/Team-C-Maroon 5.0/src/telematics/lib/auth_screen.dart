@@ -3,6 +3,8 @@ import 'auth_service.dart';
 import 'dashboard_screen.dart';
 
 class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key});
+
   @override
   _AuthScreenState createState() => _AuthScreenState();
 }
@@ -31,7 +33,10 @@ class _AuthScreenState extends State<AuthScreen> {
     if (error != null) {
       setState(() => errorMessage = error);
     } else {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => DashboardScreen()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => DashboardScreen()),
+      );
     }
   }
 
@@ -43,15 +48,34 @@ class _AuthScreenState extends State<AuthScreen> {
         padding: EdgeInsets.all(16.0),
         child: Column(
           children: [
-            if (!isLogin) TextField(controller: _nameController, decoration: InputDecoration(labelText: "Full Name")),
-            TextField(controller: _emailController, decoration: InputDecoration(labelText: "Email")),
-            TextField(controller: _passwordController, decoration: InputDecoration(labelText: "Password"), obscureText: true),
-            if (errorMessage != null) Text(errorMessage!, style: TextStyle(color: Colors.red)),
+            if (!isLogin)
+              TextField(
+                controller: _nameController,
+                decoration: InputDecoration(labelText: "Full Name"),
+              ),
+            TextField(
+              controller: _emailController,
+              decoration: InputDecoration(labelText: "Email"),
+            ),
+            TextField(
+              controller: _passwordController,
+              decoration: InputDecoration(labelText: "Password"),
+              obscureText: true,
+            ),
+            if (errorMessage != null)
+              Text(errorMessage!, style: TextStyle(color: Colors.red)),
             SizedBox(height: 20),
-            ElevatedButton(onPressed: _submit, child: Text(isLogin ? "Login" : "Sign Up")),
+            ElevatedButton(
+              onPressed: _submit,
+              child: Text(isLogin ? "Login" : "Sign Up"),
+            ),
             TextButton(
               onPressed: () => setState(() => isLogin = !isLogin),
-              child: Text(isLogin ? "Create an account" : "Already have an account? Login"),
+              child: Text(
+                isLogin
+                    ? "Create an account"
+                    : "Already have an account? Login",
+              ),
             ),
           ],
         ),
